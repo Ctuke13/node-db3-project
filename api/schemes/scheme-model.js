@@ -29,7 +29,7 @@ async function find() {
   return schemes;
 }
 
-function findById(scheme_id) {
+async function findById(scheme_id) {
   // EXERCISE B
   /*
     1B- Study the SQL query below running it in SQLite Studio against `data/schemes.db3`:
@@ -96,9 +96,36 @@ function findById(scheme_id) {
         "steps": []
       }
   */
+
+  const scheme = await db("schemes as sc")
+    .leftJoin("steps as st", "sc.scheme_id", "st.scheme_id")
+    .where("sc.scheme_id", scheme_id)
+    .select("st.*", "sc.scheme_name", "sc.scheme_id")
+    .orderBy("st.step_number");
+
+  console.log("-BEGIN-");
+  console.log(scheme);
+  console.log("-END-");
+
+  const result = {
+    scheme_id: scheme[0].scheme_id,
+    scheme_name: scheme[0].scheme_name,
+    steps: [],
+  };
+
+  scheme.forEach((step) => {
+    if (step.step_id) {
+      result.steps.push({
+        step_id: step.step_id,
+        step_number: step.step_number,
+        instructions: step.instructions,
+      });
+    }
+  });
+  return result;
 }
 
-function findSteps(scheme_id) {
+async function findSteps(scheme_id) {
   // EXERCISE C
   /*
     1C- Build a query in Knex that returns the following data.
@@ -120,6 +147,13 @@ function findSteps(scheme_id) {
         }
       ]
   */
+
+  const steps = await db("steps as st")
+    .leftJoin("schemes as sc", "st.scheme_id", "sc.scheme_id")
+    .where("st.scheme_id", scheme_id)
+    .select("st.step_id", "st.step_number", "st.instructions", "sc.scheme_name")
+    .orderBy("st.step_number");
+  return steps;
 }
 
 function add(scheme) {
@@ -127,6 +161,11 @@ function add(scheme) {
   /*
     1D- This function creates a new scheme and resolves to _the newly created scheme_.
   */
+  return db("schemes")
+    .insert(scheme)
+    .then(([scheme_id]) => {
+      return db("schemes").where("scheme_id", scheme_id).first();
+    });
 }
 
 function addStep(scheme_id, step) {
@@ -136,6 +175,18 @@ function addStep(scheme_id, step) {
     and resolves to _all the steps_ belonging to the given `scheme_id`,
     including the newly created one.
   */
+  return db("steps")
+    .insert({
+      ...step,
+      scheme_id,
+    })
+    .then(() => {
+      return db("steps as st")
+        .join("schemes as sc", "sc.scheme_id", "st.scheme_id")
+        .select("step_id", "step_number", "instructions", "scheme_name")
+        .orderBy("step_number")
+        .where("sc.scheme_id", scheme_id);
+    });
 }
 
 module.exports = {
